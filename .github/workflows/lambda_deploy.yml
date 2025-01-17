@@ -1,0 +1,80 @@
+name: Deploy Chat Function to Lambda Feedback
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        description: "The environment to deploy to"
+        required: true
+      image-name:
+        type: string
+        description: "The name of the Docker image to deploy"
+        required: true
+      function-name:
+        type: string
+        description: "The name of the Lambda function to deploy"
+        required: true
+      region:
+        type: string
+        description: "The AWS region to deploy to"
+        default: "eu-west-2"
+        required: false
+    secrets:
+      aws-access-key-id:
+        description: "The AWS access key ID"
+        required: true
+      aws-secret-key:
+        description: "The AWS secret access key"
+        required: true
+
+jobs:
+  deploy:
+    name: Deploy (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.aws-access-key-id }}
+          aws-secret-access-key: ${{ secrets.aws-secret-key }}
+          aws-region: ${{ inputs.region }}
+
+      - name: Fetch Lambda execution role ARN
+        id: fetch-role
+        run: |
+          ROLE_NAME=lambda-feedback-${{ inputs.environment }}-chat-role
+          ROLE_ARN=$(aws iam get-role --role-name $ROLE_NAME --query 'Role.Arn' --output text)
+          echo "ROLE_ARN=$ROLE_ARN" >> $GITHUB_ENV
+
+      - name: Check if Lambda function exists
+        id: check-lambda
+        run: |
+          aws lambda get-function --function-name ${{ inputs.function-name }} || echo "Function '${{ inputs.function-name }}' does not exist, creating..."
+
+      - name: Create or update Lambda function
+        env:
+          IMAGE_NAME: ${{ inputs.image-name }}
+          FUNCTION_NAME: ${{ inputs.function-name }}
+          REGION: ${{ inputs.region }}
+          ROLE_ARN: ${{ env.ROLE_ARN }}
+        run: |
+          set -e
+          if aws lambda get-function --function-name $FUNCTION_NAME; then
+            echo "Updating existing Lambda function"
+            aws lambda update-function-code \
+              --function-name $FUNCTION_NAME \
+              --image-uri $IMAGE_NAME
+          else
+            echo "Creating new Lambda function"
+            aws lambda create-function \
+              --function-name $FUNCTION_NAME \
+              --code ImageUri=$IMAGE_NAME \
+              --role $ROLE_ARN \
+              --package-type Image \
+              --region $REGION
+          fi

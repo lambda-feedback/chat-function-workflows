@@ -1,0 +1,120 @@
+name: DEV-Build and Deploy Chat Function to Lambda Feedback
+
+on:
+  workflow_call:
+    inputs:
+      template-repository-name:
+        type: string
+        description: "The name of the repository where the template is located"
+        required: true
+      region:
+        type: string
+        description: "The AWS region to deploy to"
+        default: "eu-west-2"
+        required: false
+      build-file:
+        type: string
+        description: "The path to the Dockerfile to build"
+        required: false
+        default: "Dockerfile"
+      build-context:
+        type: string
+        description: "The context to use for the Docker build"
+        required: false
+        default: "."
+      build-target:
+        type: string
+        description: "The target stage of the image to build"
+        required: false
+      build-args:
+        type: string
+        description: "The build arguments to pass to the Docker build"
+        required: false
+      build-platforms:
+        type: string
+        description: "The platforms to build the image for"
+        required: false
+    secrets:
+      # Created the Secrets Under the Repo only with These Variables
+      aws-access-key-id:
+        description: "The AWS access key ID"
+        required: true
+      aws-secret-key:
+        description: "The AWS secret access key"
+        required: true
+      build-secrets:
+        description: "The Docker secrets to use for the build"
+        required: false
+
+jobs:
+  setup:
+    name: Setup
+    runs-on: ubuntu-latest
+    outputs:
+      chat_function_name: ${{ steps.chat_function_name.outputs.name }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up boilerplate config.json
+        if: github.repository == inputs.template-repository-name
+        run: |
+          functionName=$(echo "${{ github.event.repository.name }}" | sed -E 's/([A-Z])([A-Z]*)/\L\1\2/g' | sed -E 's/-([a-z])/\U\1/g' | tr -d '-')
+          echo "{\"ChatFunctionName\": \"$functionName\"}" > config.json
+
+      - name: Check for config.json
+        run: |
+          if [[ ! -f "config.json" ]]; then echo "Error: config.json not found."; exit 1; fi
+
+      - name: Read config.json
+        id: config
+        run: |
+          echo 'config<<EOF' >> $GITHUB_OUTPUT
+          cat ./config.json >> $GITHUB_OUTPUT
+          echo 'EOF' >> $GITHUB_OUTPUT
+
+      - name: Get Chat Function Name
+        id: chat_function_name
+        run: |
+          functionName="${{fromJson(steps.config.outputs.config).ChatFunctionName}}"
+          if [[ -z "$functionName" ]]; then echo "Set ChatFunctionName in config.json"; exit 1; fi
+          echo "name=$functionName" >> "$GITHUB_OUTPUT"
+
+  dev-build:
+    uses: ./.github/workflows/lambda_build.yml
+    needs: setup
+    strategy:
+      fail-fast: false
+    with:
+      environment: dev
+      function-name: ${{ needs.setup.outputs.chat_function_name }}
+      region: ${{ inputs.region }}
+      build-file: ${{ inputs.build-file }}
+      build-context: ${{ inputs.build-context }}
+      build-target: ${{ inputs.build-target }}
+      build-args: ${{ inputs.build-args }}
+      build-platforms: ${{ inputs.build-platforms }}
+      build-push: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == 'dev') }}
+    secrets:
+      aws-access-key-id: ${{ secrets.aws-access-key-id }}
+      aws-secret-key: ${{ secrets.aws-secret-key }}
+      build-secrets: ${{ secrets.build-secrets }}
+
+  dev-deploy:
+    uses: ./.github/workflows/lambda_deploy.yml
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == 'dev')
+    needs: [setup, dev-build]
+    with:
+      environment: dev
+      image-name: ${{ needs.dev-build.outputs.registry }}/lambda-feedback-dev-chat:${{ needs.setup.outputs.chat_function_name }}
+      function-name: ${{ needs.setup.outputs.chat_function_name }}
+      region: ${{ inputs.region }}
+    secrets:
+      aws-access-key-id: ${{ secrets.aws-access-key-id }}
+      aws-secret-key: ${{ secrets.aws-secret-key }}
