@@ -27,6 +27,9 @@ on:
       aws-secret-key:
         description: "The AWS secret access key"
         required: true
+      function-admin-api-key:
+        description: "The API key for the Lambda Feedback backend function admin API"
+        required: true
 
 jobs:
   deploy:
@@ -44,37 +47,18 @@ jobs:
           aws-secret-access-key: ${{ secrets.aws-secret-key }}
           aws-region: ${{ inputs.region }}
 
-      - name: Fetch Lambda execution role ARN
-        id: fetch-role
-        run: |
-          ROLE_NAME=lambda-feedback-${{ inputs.environment }}-chat-role
-          ROLE_ARN=$(aws iam get-role --role-name $ROLE_NAME --query 'Role.Arn' --output text)
-          echo "ROLE_ARN=$ROLE_ARN" >> $GITHUB_ENV
-
-      - name: Check if Lambda function exists
-        id: check-lambda
-        run: |
-          aws lambda get-function --function-name ${{ inputs.function-name }} || echo "Function '${{ inputs.function-name }}' does not exist, creating..."
-
-      - name: Create or update Lambda function
+      - name: Deploy Chat Function through Backend API
+        id: deploy-chat-function
         env:
+          BACKEND_API_URL: https://${{ inputs.environment }}-api.lambdafeedback.com
+          API_KEY: ${{ secrets.function-admin-api-key }}
           IMAGE_NAME: ${{ inputs.image-name }}
           FUNCTION_NAME: ${{ inputs.function-name }}
-          REGION: ${{ inputs.region }}
-          ROLE_ARN: ${{ env.ROLE_ARN }}
         run: |
-          set -e
-          if aws lambda get-function --function-name $FUNCTION_NAME; then
-            echo "Updating existing Lambda function"
-            aws lambda update-function-code \
-              --function-name $FUNCTION_NAME \
-              --image-uri $IMAGE_NAME
-          else
-            echo "Creating new Lambda function"
-            aws lambda create-function \
-              --function-name $FUNCTION_NAME \
-              --code ImageUri=$IMAGE_NAME \
-              --role $ROLE_ARN \
-              --package-type Image \
-              --region $REGION
-          fi
+          curl -f --location --request POST "$BACKEND_API_URL/chat-function/ensure" \
+          --header 'content-type: application/json' \
+          --data-raw "{
+              \"apiKey\": \"$API_KEY\",
+              \"dockerImageUri\": \"$IMAGE_NAME\",
+              \"functionName\": \"$FUNCTION_NAME\"
+          }"
