@@ -103,7 +103,7 @@ jobs:
       build-target: ${{ inputs.build-target }}
       build-args: ${{ inputs.build-args }}
       build-platforms: ${{ inputs.build-platforms }}
-      build-push: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == 'dev') }}
+      build-push: ${{ github.event_name == 'workflow_run' || (github.event_name == 'push' && github.ref_name == 'dev') }}
     secrets:
       aws-access-key-id: ${{ secrets.aws-access-key-id }}
       aws-secret-key: ${{ secrets.aws-secret-key }}
@@ -111,7 +111,7 @@ jobs:
 
   dev-deploy:
     uses: ./.github/workflows/lambda_deploy.yml
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == 'dev')
+    if: github.event_name == 'workflow_run' || (github.event_name == 'push' && github.ref_name == 'dev')
     needs: [setup, dev-build]
     with:
       environment: dev
