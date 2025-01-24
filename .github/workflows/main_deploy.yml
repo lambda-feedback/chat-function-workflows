@@ -45,6 +45,9 @@ on:
       function-admin-api-key:
         description: "The API key for the Lambda Feedback backend function admin API"
         required: true
+      github-token:
+        description: "The GitHub token to use for the approval workflow"
+        required: true
       build-secrets:
         description: "The Docker secrets to use for the build"
         required: false
@@ -135,7 +138,7 @@ jobs:
           # approvers: approvers
           minimum-approvals: 1
           timeout-minutes: 10
-          secret: ${{ github.TOKEN }}
+          secret: ${{ secrets.github-token }}
           issue-title: Approve Production Deployment
           issue-body: Approve production deployment for the Chatbot Module
           exclude-workflow-initiator-as-approver: false
