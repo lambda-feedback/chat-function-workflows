@@ -7,6 +7,10 @@ on:
         type: string
         description: "The name of the repository where the template is located"
         required: true
+      github-token:
+        type: string
+        description: "The GitHub token to use for the approval workflow"
+        required: true
       region:
         type: string
         description: "The AWS region to deploy to"
@@ -44,9 +48,6 @@ on:
         required: true
       function-admin-api-key:
         description: "The API key for the Lambda Feedback backend function admin API"
-        required: true
-      github-token:
-        description: "The GitHub token to use for the approval workflow"
         required: true
       build-secrets:
         description: "The Docker secrets to use for the build"
@@ -138,7 +139,7 @@ jobs:
           # approvers: approvers
           minimum-approvals: 1
           timeout-minutes: 10
-          secret: ${{ secrets.github-token }}
+          secret: ${{ inputs.github-token }}
           issue-title: Approve Production Deployment
           issue-body: Approve production deployment for the Chatbot Module
           exclude-workflow-initiator-as-approver: false
