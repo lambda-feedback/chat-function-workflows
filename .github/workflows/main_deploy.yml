@@ -139,7 +139,7 @@ jobs:
           # approvers: approvers
           minimum-approvals: 1
           timeout-minutes: 10
-          secret: ${{ inputs.github-token }}
+          secret: ${{ inputs.github-token != '' && inputs.github-token || secrets.GITHUB_TOKEN }}
           issue-title: Approve Production Deployment
           issue-body: Approve production deployment for the Chatbot Module
           exclude-workflow-initiator-as-approver: false
