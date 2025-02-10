@@ -20,6 +20,10 @@ on:
         description: "The AWS region to deploy to"
         default: "eu-west-2"
         required: false
+      deployed-environment-variables:
+        type: string
+        description: "The environment variables to set for the lambda function on aws, set as mock values."
+        required: false
     secrets:
       aws-access-key-id:
         description: "The AWS access key ID"
@@ -54,6 +58,7 @@ jobs:
           API_KEY: ${{ secrets.function-admin-api-key }}
           IMAGE_NAME: ${{ inputs.image-name }}
           FUNCTION_NAME: ${{ inputs.function-name }}
+          ENVIRONMENT_VARIABLES: ${{ inputs.deployed-environment-variables }}
         run: |
           curl -f --location --request POST "$BACKEND_API_URL/chat-function/ensure" \
           --header 'content-type: application/json' \
@@ -61,4 +66,5 @@ jobs:
               \"apiKey\": \"$API_KEY\",
               \"dockerImageUri\": \"$IMAGE_NAME\",
               \"functionName\": \"$FUNCTION_NAME\"
+              \"arguments\": \"$ENVIRONMENT_VARIABLES\"
           }"
