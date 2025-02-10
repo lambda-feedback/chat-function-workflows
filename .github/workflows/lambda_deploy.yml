@@ -65,6 +65,6 @@ jobs:
           --data-raw "{
               \"apiKey\": \"$API_KEY\",
               \"dockerImageUri\": \"$IMAGE_NAME\",
-              \"functionName\": \"$FUNCTION_NAME\"
-              \"arguments\": \"$ENVIRONMENT_VARIABLES\"
+              \"functionName\": \"$FUNCTION_NAME\",
+              \"arguments\": $ENVIRONMENT_VARIABLES
           }"
