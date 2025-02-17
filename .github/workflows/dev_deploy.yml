@@ -7,6 +7,10 @@ on:
         type: string
         description: "The name of the repository where the template is located"
         required: true
+      deployed-environment-variables:
+        type: string
+        description: "The environment variables to set for the lambda function on aws, set as mock values."
+        required: false
       region:
         type: string
         description: "The AWS region to deploy to"
@@ -118,6 +122,7 @@ jobs:
       image-name: ${{ needs.dev-build.outputs.registry }}/lambda-feedback-dev-chat:${{ needs.setup.outputs.chat_function_name }}
       function-name: ${{ needs.setup.outputs.chat_function_name }}
       region: ${{ inputs.region }}
+      deployed-environment-variables: ${{ inputs.deployed-environment-variables }}
     secrets:
       aws-access-key-id: ${{ secrets.aws-access-key-id }}
       aws-secret-key: ${{ secrets.aws-secret-key }}
