@@ -58,13 +58,23 @@ jobs:
           API_KEY: ${{ secrets.function-admin-api-key }}
           IMAGE_NAME: ${{ inputs.image-name }}
           FUNCTION_NAME: ${{ inputs.function-name }}
-          ENVIRONMENT_VARIABLES: ${{ inputs.deployed-environment-variables }}
+          ENVIRONMENT_VARIABLES: ${{ inputs.deployed-environment-variables }} # optional to be set
         run: |
-          curl -f --location --request POST "$BACKEND_API_URL/chat-function/ensure" \
-          --header 'content-type: application/json' \
-          --data-raw "{
-              \"apiKey\": \"$API_KEY\",
-              \"dockerImageUri\": \"$IMAGE_NAME\",
-              \"functionName\": \"$FUNCTION_NAME\",
-              \"arguments\": $ENVIRONMENT_VARIABLES
-          }"
+          if [ -z "$ENVIRONMENT_VARIABLES" ]; then
+            curl -f --location --request POST "$BACKEND_API_URL/chat-function/ensure" \
+            --header 'content-type: application/json' \
+            --data-raw "{
+          \"apiKey\": \"$API_KEY\",
+          \"dockerImageUri\": \"$IMAGE_NAME\",
+          \"functionName\": \"$FUNCTION_NAME\"
+            }"
+          else
+            curl -f --location --request POST "$BACKEND_API_URL/chat-function/ensure" \
+            --header 'content-type: application/json' \
+            --data-raw "{
+          \"apiKey\": \"$API_KEY\",
+          \"dockerImageUri\": \"$IMAGE_NAME\",
+          \"functionName\": \"$FUNCTION_NAME\",
+          \"arguments\": $ENVIRONMENT_VARIABLES
+            }"
+          fi
