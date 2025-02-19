@@ -75,6 +75,6 @@ jobs:
           \"apiKey\": \"$API_KEY\",
           \"dockerImageUri\": \"$IMAGE_NAME\",
           \"functionName\": \"$FUNCTION_NAME\",
-          \"arguments\": \"$ENVIRONMENT_VARIABLES\"
+          \"arguments\": $ENVIRONMENT_VARIABLES
             }"
           fi
