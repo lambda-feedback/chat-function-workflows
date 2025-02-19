@@ -115,7 +115,7 @@ jobs:
 
   dev-deploy:
     uses: ./.github/workflows/lambda_deploy.yml
-    if: ${{ github.event_name == 'workflow_run' || (github.event_name == 'push' && github.ref_name == 'dev') }}
+    if: ${{ github.event_name == 'workflow_run' || github.event == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == 'dev') }}
     needs: [setup, dev-build]
     with:
       environment: dev
