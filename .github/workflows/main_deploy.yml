@@ -126,6 +126,7 @@ jobs:
       image-name: ${{ needs.staging-build.outputs.registry }}/lambda-feedback-staging-chat:${{ needs.setup.outputs.chat_function_name }}
       function-name: ${{ needs.setup.outputs.chat_function_name }}
       region: ${{ inputs.region }}
+      deployed-environment-variables: ${{ inputs.deployed-environment-variables }}
     secrets:
       aws-access-key-id: ${{ secrets.aws-access-key-id }}
       aws-secret-key: ${{ secrets.aws-secret-key }}
