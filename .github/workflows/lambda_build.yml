@@ -44,7 +44,7 @@ on:
         description: "The platforms to build the image for"
         required: false
     secrets:
-      aws-access-key-id:
+      aws-key-id:
         description: "The AWS access key ID"
         required: true
       aws-secret-key:
@@ -77,7 +77,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.aws-access-key-id }}
+          aws-access-key-id: ${{ secrets.aws-key-id }}
           aws-secret-access-key: ${{ secrets.aws-secret-key }}
           aws-region: ${{ inputs.region }}
 

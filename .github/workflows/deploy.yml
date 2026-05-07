@@ -1,4 +1,4 @@
-name: MAIN-Build and Deploy Chat Function to Lambda Feedback
+name: Build and Deploy Chat Function to Lambda Feedback
 
 on:
   workflow_call:
@@ -7,14 +7,14 @@ on:
         type: string
         description: "The name of the repository where the template is located"
         required: true
-      deployed-environment-variables:
+      environment:
         type: string
-        description: "The environment variables to set for the lambda function on aws, set as mock values."
-        required: false
+        description: "Deploy to staging or production"
+        required: true
+        default: staging
       region:
         type: string
         description: "The AWS region to deploy to"
-        default: "eu-west-2"
         required: false
       build-file:
         type: string
@@ -37,10 +37,24 @@ on:
       build-platforms:
         type: string
         description: "The platforms to build the image for"
+        default: "aws"
+        required: false
+      version-bump:
+        type: string
+        description: "Used for prod: The version number to bump (major, minor or patch)"
+        required: false
+        default: "patch"
+      branch:
+        type: string
+        description: "Used for prod: The branch to deploy"
+        required: false
+        default: "main"
+      deployed-environment-variables:
+        type: string
+        description: "The environment variables to set for the lambda function on aws, set as mock values."
         required: false
     secrets:
-      # Created the Secrets Under the Repo only with These Variables
-      aws-access-key-id:
+      aws-key-id:
         description: "The AWS access key ID"
         required: true
       aws-secret-key:
@@ -48,9 +62,6 @@ on:
         required: true
       function-admin-api-key:
         description: "The API key for the Lambda Feedback backend function admin API"
-        required: true
-      github-token:
-        description: "The GitHub token to use for the approval workflow"
         required: true
       build-secrets:
         description: "The Docker secrets to use for the build"
@@ -62,11 +73,12 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       chat_function_name: ${{ steps.chat_function_name.outputs.name }}
+      region: ${{ steps.set-region.outputs.region }}
+      sha: ${{ steps.sha.outputs.sha }}
     permissions:
       contents: read
       packages: write
       id-token: write
-      issues: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -97,91 +109,90 @@ jobs:
           if [[ -z "$functionName" ]]; then echo "Set ChatFunctionName in config.json"; exit 1; fi
           echo "name=$functionName" >> "$GITHUB_OUTPUT"
 
-  staging-build:
-    uses: ./.github/workflows/lambda_build.yml
+      - name: Set default region
+        id: set-region
+        run: |
+          if [[ -n "${{ inputs.region }}" ]]; then
+            region="${{ inputs.region }}"
+          else
+            region="eu-west-2"
+          fi
+          echo "region=$region" >> "$GITHUB_OUTPUT"
+
+      - name: Output SHA
+        id: sha
+        run: echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Validate AWS secrets
+        run: |
+          if [[ -z "${{ secrets.aws-key-id }}" ]]; then
+            echo "Error: aws-key-id secret is required"
+            exit 1
+          fi
+          if [[ -z "${{ secrets.aws-secret-key }}" ]]; then
+            echo "Error: aws-secret-key secret is required"
+            exit 1
+          fi
+          if [[ -z "${{ secrets.function-admin-api-key }}" ]]; then
+            echo "Error: function-admin-api-key secret is required"
+            exit 1
+          fi
+
+  deploy-staging:
+    if: inputs.environment == 'staging' || inputs.environment == 'production'
+    uses: ./.github/workflows/staging_deploy.yml
     needs: setup
-    strategy:
-      fail-fast: false
     with:
-      environment: staging
-      function-name: ${{ needs.setup.outputs.chat_function_name }}
-      region: ${{ inputs.region }}
+      chat_function_name: ${{ needs.setup.outputs.chat_function_name }}
+      template-repository-name: ${{ inputs.template-repository-name }}
+      region: ${{ needs.setup.outputs.region }}
       build-file: ${{ inputs.build-file }}
       build-context: ${{ inputs.build-context }}
       build-target: ${{ inputs.build-target }}
       build-args: ${{ inputs.build-args }}
       build-platforms: ${{ inputs.build-platforms }}
-      build-push: ${{ github.ref_name == github.event.repository.default_branch }}
-    secrets:
-      aws-access-key-id: ${{ secrets.aws-access-key-id }}
-      aws-secret-key: ${{ secrets.aws-secret-key }}
-      build-secrets: ${{ secrets.build-secrets }}
-
-  staging-deploy:
-    uses: ./.github/workflows/lambda_deploy.yml
-    if: ${{ github.ref_name == github.event.repository.default_branch }}
-    needs: [setup, staging-build]
-    with:
-      environment: staging
-      image-name: ${{ needs.staging-build.outputs.registry }}/lambda-feedback-staging-chat:${{ needs.setup.outputs.chat_function_name }}
-      function-name: ${{ needs.setup.outputs.chat_function_name }}
-      region: ${{ inputs.region }}
       deployed-environment-variables: ${{ inputs.deployed-environment-variables }}
     secrets:
-      aws-access-key-id: ${{ secrets.aws-access-key-id }}
+      aws-key-id: ${{ secrets.aws-key-id }}
       aws-secret-key: ${{ secrets.aws-secret-key }}
       function-admin-api-key: ${{ secrets.function-admin-api-key }}
+      build-secrets: ${{ secrets.build-secrets }}
 
-  approval_job:
-    needs: [staging-build, staging-deploy]
-    name: Waiting for approval
+  await-approval:
+    name: "Await Manual Approval (Production)"
+    if: inputs.environment == 'production' && needs.deploy-staging.result == 'success'
+    environment: production-override
     runs-on: ubuntu-latest
+    needs: [setup, deploy-staging]
     steps:
-      - name: Approve Production Deployment
-        uses: trstringer/manual-approval@v1
-        with:
-          approvers: neagualexa
-          # approvers: approvers
-          minimum-approvals: 1
-          timeout-minutes: 10
-          secret: ${{ secrets.github-token != '' && secrets.github-token || secrets.GITHUB_TOKEN }}
-          issue-title: Approve Production Deployment
-          issue-body: Approve production deployment for the Chatbot Module
-          exclude-workflow-initiator-as-approver: false
-          additional-approved-words: "fine, go, approved"
-          additional-denied-words: "deny, stop"
+      - name: "Manual approval received for production deployment"
+        run: echo "Production deployment approved."
 
-  prod-build:
-    uses: ./.github/workflows/lambda_build.yml
-    needs: [setup, approval_job]
-    strategy:
-      fail-fast: false
+  deploy-production:
+    if: >
+      always() &&
+      inputs.environment == 'production' &&
+      needs.deploy-staging.result == 'success' &&
+      needs.await-approval.result == 'success'
+    uses: ./.github/workflows/production_deploy.yml
+    needs:
+      - setup
+      - deploy-staging
+      - await-approval
     with:
-      environment: prod
-      function-name: ${{ needs.setup.outputs.chat_function_name }}
-      region: ${{ inputs.region }}
+      chat_function_name: ${{ needs.setup.outputs.chat_function_name }}
+      template-repository-name: ${{ inputs.template-repository-name }}
+      region: ${{ needs.setup.outputs.region }}
       build-file: ${{ inputs.build-file }}
       build-context: ${{ inputs.build-context }}
       build-target: ${{ inputs.build-target }}
       build-args: ${{ inputs.build-args }}
       build-platforms: ${{ inputs.build-platforms }}
-      build-push: ${{ github.ref_name == github.event.repository.default_branch }}
-    secrets:
-      aws-access-key-id: ${{ secrets.aws-access-key-id }}
-      aws-secret-key: ${{ secrets.aws-secret-key }}
-      build-secrets: ${{ secrets.build-secrets }}
-
-  prod-deploy:
-    uses: ./.github/workflows/lambda_deploy.yml
-    if: ${{ github.ref_name == github.event.repository.default_branch }}
-    needs: [setup, prod-build]
-    with:
-      environment: prod
-      image-name: ${{ needs.prod-build.outputs.registry }}/lambda-feedback-prod-chat:${{ needs.setup.outputs.chat_function_name }}
-      function-name: ${{ needs.setup.outputs.chat_function_name }}
-      region: ${{ inputs.region }}
+      version-bump: ${{ inputs.version-bump }}
+      sha: ${{ needs.setup.outputs.sha }}
       deployed-environment-variables: ${{ inputs.deployed-environment-variables }}
     secrets:
-      aws-access-key-id: ${{ secrets.aws-access-key-id }}
+      aws-key-id: ${{ secrets.aws-key-id }}
       aws-secret-key: ${{ secrets.aws-secret-key }}
       function-admin-api-key: ${{ secrets.function-admin-api-key }}
+      build-secrets: ${{ secrets.build-secrets }}

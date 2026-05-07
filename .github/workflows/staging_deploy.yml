@@ -1,0 +1,94 @@
+name: Deploy Chat Function to Staging
+
+on:
+  workflow_call:
+    inputs:
+      chat_function_name:
+        type: string
+        description: "The name of the chat function to deploy."
+        required: true
+      template-repository-name:
+        type: string
+        description: "The name of the repository where the template is located"
+        required: true
+      region:
+        type: string
+        description: "The AWS region to deploy to"
+        required: false
+      build-file:
+        type: string
+        description: "The path to the Dockerfile to build"
+        required: false
+        default: "Dockerfile"
+      build-context:
+        type: string
+        description: "The context to use for the Docker build"
+        required: false
+        default: "."
+      build-target:
+        type: string
+        description: "The target stage of the image to build"
+        required: false
+      build-args:
+        type: string
+        description: "The build arguments to pass to the Docker build"
+        required: false
+      build-platforms:
+        type: string
+        description: "The platforms to build the image for"
+        default: "aws"
+        required: false
+      deployed-environment-variables:
+        type: string
+        description: "The environment variables to set for the lambda function on aws, set as mock values."
+        required: false
+    secrets:
+      aws-key-id:
+        description: "The AWS access key ID"
+        required: true
+      aws-secret-key:
+        description: "The AWS secret access key"
+        required: true
+      function-admin-api-key:
+        description: "The API key for the Lambda Feedback backend function admin API"
+        required: true
+      build-secrets:
+        description: "The Docker secrets to use for the build"
+        required: false
+
+jobs:
+  build-aws:
+    uses: ./.github/workflows/lambda_build.yml
+    if: inputs.build-platforms == 'aws'
+    strategy:
+      fail-fast: false
+    with:
+      environment: staging
+      function-name: ${{ inputs.chat_function_name }}
+      region: ${{ inputs.region }}
+      build-file: ${{ inputs.build-file }}
+      build-context: ${{ inputs.build-context }}
+      build-target: ${{ inputs.build-target }}
+      build-args: ${{ inputs.build-args }}
+      build-platforms: ${{ inputs.build-platforms }}
+      build-push: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == github.event.repository.default_branch) }}
+    secrets:
+      aws-key-id: ${{ secrets.aws-key-id }}
+      aws-secret-key: ${{ secrets.aws-secret-key }}
+      build-secrets: ${{ secrets.build-secrets }}
+
+  deploy-staging-aws:
+    uses: ./.github/workflows/lambda_deploy.yml
+    if: inputs.build-platforms == 'aws' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == github.event.repository.default_branch))
+    needs: build-aws
+    with:
+      environment: staging
+      api-url: https://staging-api.lambdafeedback.com
+      image-name: ${{ needs.build-aws.outputs.registry }}/lambda-feedback-staging-chat:${{ inputs.chat_function_name }}
+      function-name: ${{ inputs.chat_function_name }}
+      region: ${{ inputs.region }}
+      deployed-environment-variables: ${{ inputs.deployed-environment-variables }}
+    secrets:
+      aws-key-id: ${{ secrets.aws-key-id }}
+      aws-secret-key: ${{ secrets.aws-secret-key }}
+      function-admin-api-key: ${{ secrets.function-admin-api-key }}

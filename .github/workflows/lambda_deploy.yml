@@ -7,6 +7,10 @@ on:
         type: string
         description: "The environment to deploy to"
         required: true
+      api-url:
+        type: string
+        description: "The URL of the backend API"
+        required: true
       image-name:
         type: string
         description: "The name of the Docker image to deploy"
@@ -25,7 +29,7 @@ on:
         description: "The environment variables to set for the lambda function on aws, set as mock values."
         required: false
     secrets:
-      aws-access-key-id:
+      aws-key-id:
         description: "The AWS access key ID"
         required: true
       aws-secret-key:
@@ -47,14 +51,14 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.aws-access-key-id }}
+          aws-access-key-id: ${{ secrets.aws-key-id }}
           aws-secret-access-key: ${{ secrets.aws-secret-key }}
           aws-region: ${{ inputs.region }}
 
       - name: Deploy Chat Function through Backend API
         id: deploy-chat-function
         env:
-          BACKEND_API_URL: https://${{ inputs.environment }}-api.lambdafeedback.com
+          BACKEND_API_URL: ${{ inputs.api-url }}
           API_KEY: ${{ secrets.function-admin-api-key }}
           IMAGE_NAME: ${{ inputs.image-name }}
           FUNCTION_NAME: ${{ inputs.function-name }}
