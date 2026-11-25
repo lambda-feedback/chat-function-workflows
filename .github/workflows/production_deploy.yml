@@ -58,9 +58,9 @@ on:
       aws-secret-key:
         description: "The AWS secret access key"
         required: true
-      function-admin-api-key:
-        description: "The API key for the Lambda Feedback backend function admin API"
-        required: true
+      function-admin-api-key-production:
+        description: "The API key for the Lambda Feedback production backend function admin API"
+        required: false
       build-secrets:
         description: "The Docker secrets to use for the build"
         required: false
@@ -242,4 +242,4 @@ jobs:
     secrets:
       aws-key-id: ${{ secrets.aws-key-id }}
       aws-secret-key: ${{ secrets.aws-secret-key }}
-      function-admin-api-key: ${{ secrets.function-admin-api-key }}
+      function-admin-api-key: ${{ secrets.function-admin-api-key-production }}
